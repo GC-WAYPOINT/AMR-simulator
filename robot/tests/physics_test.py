@@ -130,6 +130,33 @@ def test_charger():
     r.stop()
 
 
+def test_battery_model():
+    """적재 중 주행 소모 증가 (--battery-load-factor) 와 PICK payload_id 연결. 정지·가감속 소모는 0 으로 둔다."""
+    import tempfile
+    r = Robot("BM1", 3, 6, extra=["--battery", "90", "--battery-idle-drain", "0", "--battery-move-drain", "0.2",
+                                  "--battery-load-factor", "1.0", "--no-robot-detect"])
+    b0 = r.state["battery"]["charge"]
+    r.order("bm-empty", ["13,6"])
+    s = r.idle_done("bm-empty", 60)
+    b1 = r.state["battery"]["charge"]
+    empty = b0 - b1
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+        f.write("MOVE 13 6\nPICK 1 payload_id=box-1\nMOVE 23 6\n")
+        script = f.name
+    subprocess.run([f"{REPO}/build/bin/send_order", "BM1", "--port", str(PORT), "--order-id", "bm-load",
+                    "--script", script], capture_output=True)
+    loaded_seen = r.wait(lambda s: any(l.get("payload_id") == "box-1" for l in s.get("loads", [])), 30)
+    r.idle_done("bm-load", 60)
+    loaded = b1 - r.state["battery"]["charge"]
+    os.unlink(script)
+    check("battery_model: PICK with payload_id is reported in State.loads", loaded_seen is not None,
+          f"loads={r.state.get('loads')}")
+    check("battery_model: same 10 m drive drains about 2x when loaded (factor 1.0)",
+          s is not None and empty > 0.3 and 1.6 < loaded / empty < 2.4,
+          f"empty={empty:.2f}% loaded={loaded:.2f}%")
+    r.stop()
+
+
 def test_battery():
     r = Robot("B1", 3, 6, extra=["--battery", "20.3"])
     r.order("b1", ["40,6"])
@@ -856,7 +883,7 @@ ALL = {
     "move": test_move, "straight": test_straight, "dock": test_dock_park, "collision": test_collision,
     "default": test_default_localized, "script": test_script, "curve": test_curve, "lazy": test_lazy_plan,
     "pause": test_pause_cancel, "ghost": test_ghost_start, "lowfric": test_low_friction, "slip": test_normal_slip_small,
-    "loop": test_loop_map, "longrun": test_longrun, "obstacle": test_obstacle, "collide_obstacle": test_collide_obstacle, "robots": test_robots, "world": test_world, "reroute": test_reroute, "memory": test_memory, "shortcut": test_shortcut, "navigation": test_navigation, "detour": test_detour, "detour_clear": test_detour_clear, "zone": test_zone_obstacles, "dockint": test_dock_interrupt, "gui": test_gui_offscreen, "topic": test_physics_topic, "estimate": test_estimated_pose, "localization": test_localization, "unlocalized": test_unlocalized, "charger": test_charger, "battery": test_battery,
+    "loop": test_loop_map, "longrun": test_longrun, "obstacle": test_obstacle, "collide_obstacle": test_collide_obstacle, "robots": test_robots, "world": test_world, "reroute": test_reroute, "memory": test_memory, "shortcut": test_shortcut, "navigation": test_navigation, "detour": test_detour, "detour_clear": test_detour_clear, "zone": test_zone_obstacles, "dockint": test_dock_interrupt, "gui": test_gui_offscreen, "topic": test_physics_topic, "estimate": test_estimated_pose, "localization": test_localization, "unlocalized": test_unlocalized, "charger": test_charger, "battery": test_battery, "battery_model": test_battery_model,
 }
 
 if __name__ == "__main__":

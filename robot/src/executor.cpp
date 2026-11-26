@@ -1289,6 +1289,7 @@ void OrderExecutor::update_loads(const Action& action) {
         for (auto it = loads_.begin(); it != loads_.end(); ++it)
             if (it->payload_id == *action.payload_id) { loads_.erase(it); break; }
     }
+    battery.loads = (int)loads_.size();   // 적재 중 주행 소모 증가 (--battery-load-factor)
 }
 
 State OrderExecutor::build_state(long long header_id, double timestamp) const {

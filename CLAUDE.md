@@ -117,7 +117,7 @@ DOCK/PARK, 충전기·배터리, 충돌, 일시정지/취소, 벽 안 시작, �
 .venv/bin/python robot/tests/physics_test.py detour memory
 ```
 
-이름(`physics_test.py` 맨 아래 `ALL`): `move straight dock collision default script curve lazy pause ghost lowfric slip loop longrun obstacle collide_obstacle robots world reroute memory shortcut navigation detour detour_clear zone dockint gui topic estimate localization unlocalized charger battery`. 새 시나리오는 `test_*` 함수를 만들고 `ALL` 에 등록한다.
+이름(`physics_test.py` 맨 아래 `ALL`): `move straight dock collision default script curve lazy pause ghost lowfric slip loop longrun obstacle collide_obstacle robots world reroute memory shortcut navigation detour detour_clear zone dockint gui topic estimate localization unlocalized charger battery battery_model`. 새 시나리오는 `test_*` 함수를 만들고 `ALL` 에 등록한다.
 
 다중 로봇은 시나리오 러너로 본다: `.venv/bin/python tools/run_scenario.py scripts/scenarios/<이름>.json [--viewer] [--time-scale N] [--keep]`. 시나리오 JSON 은 `map`, `robots[{id,x,y,theta,at,args}]`, `obstacles[{id,x,y,width,height,at,clear_at}]`(월드 장애물), `orders[{robot,at,path|script,action,params}]`, `expect[{robot,pose,tol} | {no_fatal} | {min_separation} | {robot,error}]`, `timeout` 이고 시각은 시뮬 초다. `min_separation` 은 `physics` 토픽 참 자세로 잰 로봇 쌍의 최소 중심 거리다. 예시: `head_on`(정면 교차), `parked`(서 있는 로봇 우회), `late_join`(장애물을 먼저 놓고 로봇을 나중에 띄움), `crossing_staggered`(시차 직각 교차)는 통과하고, `crossing`(동시 직각 교차)은 **알려진 한계라 실패한다** (아래 "공유 세계").
 
@@ -182,6 +182,7 @@ CI(`.github/workflows/ci.yml`): macOS 는 빌드 + 단위 테스트 + 통합 일
   - `State.localization` 필드와 `INIT_POSITION` 액션(params x, y, theta, 선택 map_id)이 프로토콜에 추가됐다. `viewer/common/schemas.py` 도 같이 고쳤다 (FMS 원본 `AMR-fms/common` 과 동일).
   - 충전기: 맵 폴더의 `chargers.json`(`chargers.cpp`). `chargers.json` 이 **있는 맵에서만** DOCK 이 충전기 근처(0.3 m/0.35 rad)·진입 방향·자세(0.06 m/0.1 rad)를 검사해 `DOCK_FAILED` 를 낸다. 없는 맵은 예전처럼 충전기 없이 DOCK 을 받는다. `CHARGE` 가 충전기 밖이면 `CHARGE_FAILED`.
   - 배터리: `--battery-low`(기본 20, WARNING `LOW_BATTERY`), `--battery-critical`(기본 5, FATAL `BATTERY_CRITICAL` 이면 DOCK 오더만 받음), 0% 는 `BATTERY_EMPTY`.
+  - 배터리 소모 모델 (`battery.hpp`): 소모율(%/s) = `efficiency × (idle + (1 + load_factor × 적재물 수) × (move × |v|/vmax + accel × |a|/amax))`. 옵션 `--battery-idle-drain`(0.01) `--battery-move-drain`(0.05) `--battery-accel-drain`(0) `--battery-load-factor`(0) `--battery-variation`(0, 개체 편차 표준편차 → `efficiency`, `--seed`+ID 로 고정, 0.7~1.3). 기본값이면 예전 공식과 같다. 적재물 수는 `payload_id` 가 있는 PICK/DROP 완료 때 `update_loads` 가 맞춘다 (payload_id 없는 PICK 은 적재로 안 센다). 가감속은 연속 step 의 속도 차이라 정지 분기로 바뀌는 첫 tick 이 제동 소모 한 번으로 잡힌다. 시험 `make -C robot test battery`, `physics_test.py battery_model`(적재 시 소모 2배 확인).
   - 교통 구역: 맵 폴더 `annotations.json` 의 `occupancy` 구역과 노드 `allowed_zone_ids`, `Order.traffic_control`. 허가 없는 구역은 재계획에서 막고 직선 이동은 `TRAFFIC_BLOCKED`(FATAL). 구역 정의는 FMS 가 만든 번들에서 온다 (이 리포에는 편집기가 없다).
   - 감속 구역: `annotations.json` 의 `type=slow` 구역(다각형 + `speed_limit` m/s). `map_model.cpp` 가 `slow_zones` 로 읽고, `tick_logic` 이 매 tick `MapModel::speed_limit_at(추정 x, y)` 를 `kinematics.speed_cap` 에 건다 (겹치면 가장 낮은 값). 주행을 막지 않고 경로계획에도 안 쓴다. 값이 잘못된 구역은 그 구역만 건너뛰고 맵은 거부하지 않는다. 다각형 판정은 `common/map_annotations.py` `Zone.contains` 와 같은 ray casting 이다.
   - 복도 중앙 주행: planner A* 에 벽 근접 비용을 더한다. `--no-center-path`, `--center-weight`(6), `--center-reach`(1.5 m).

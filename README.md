@@ -83,6 +83,10 @@ localhost:1883). `scripts/launch.sh`는 리포 루트 `maps/`에서 맵을 찾�
   `State.localization` = `UNLOCALIZED | LOCALIZING | LOCALIZED`, `localization_score` 는 가상 라이다 스캔 매칭 점수 (0.8 미만이면 `LOCALIZATION_FAILED` 경고). 뷰어는 위치를 모르는 로봇을 흐린 빨간 점선으로 그린다.
 - 충전기: 맵 폴더의 `chargers.json` (예: `maps/empty_hall1/chargers.json`). 이 파일이 있는 맵에서만 DOCK 이 충전기 위치·진입 방향·자세를 검사하고 어긋나면 `DOCK_FAILED`.
 - 배터리: `--battery-low`(기본 20, 경고), `--battery-critical`(기본 5, 이후 DOCK 오더만 받음).
+- 배터리 소모: 소모율(%/s) = `efficiency × (정지 + (1 + 적재 비율 × 적재물 수) × (주행 × |v|/vmax + 가감속 × |a|/amax))`.
+  `--battery-idle-drain 0.01 --battery-move-drain 0.05 --battery-accel-drain 0 --battery-load-factor 0 --battery-variation 0` 이 기본값이고 예전 공식과 같다.
+  `--battery-variation S` 는 로봇마다 소모 배율을 평균 1, 표준편차 S 로 하나 뽑는다 (`--seed` 와 로봇 ID 로 고정, 0.7~1.3). 적재물은 `payload_id` 가 있는 PICK 부터 센다.
+  실험·학습 데이터용 예시(값은 추정, 예비 관측 후 조정): `--battery-accel-drain 0.03 --battery-load-factor 0.3 --battery-variation 0.08`.
 - 복도 중앙 주행(기본 켜짐): `--no-center-path`, `--center-weight`, `--center-reach`. 재현용 `--seed`, `--obstacle-seed`, `--map-cache`.
 - 맵 `annotations.json` 의 점유 구역(occupancy)과 노드 `allowed_zone_ids` 가 있으면 허가 없는 구역을 피하고, 직선 이동이 막히면 `TRAFFIC_BLOCKED`.
 

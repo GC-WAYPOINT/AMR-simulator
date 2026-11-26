@@ -42,7 +42,7 @@ TOOL_BINS := $(BIN)/send_order $(BIN)/place_obstacle $(BIN)/obstacle_zone $(BIN)
 
 # 단위 테스트 (tests/unit/*.cpp, 프레임워크 없음). MQTT 브로커 없이 돈다. 파일을 추가하면 여기에 넣는다.
 UNIT_SRC := tests/unit/main.cpp tests/unit/test_schemas.cpp tests/unit/test_map_planner.cpp \
-            tests/unit/test_obstacles.cpp tests/unit/test_localizer.cpp
+            tests/unit/test_obstacles.cpp tests/unit/test_localizer.cpp tests/unit/test_battery.cpp
 UNIT_OBJ := $(addprefix $(OBJ)/,$(UNIT_SRC:.cpp=.o))
 
 .SECONDARY:

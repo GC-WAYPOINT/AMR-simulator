@@ -42,6 +42,11 @@ struct Args {
     double max_velocity = 1.2, max_acceleration = 0.6;
     double battery = 100.0;
     double battery_low = 20.0, battery_critical = 5.0;
+    // 배터리 소모 모델 (battery.hpp). 기본값은 예전 공식과 같다.
+    double battery_idle_drain = 0.01, battery_move_drain = 0.05;   // %/s
+    double battery_accel_drain = 0.0;    // 최대 가감속일 때 더하는 %/s
+    double battery_load_factor = 0.0;    // 적재물 1개당 주행 소모 증가 비율
+    double battery_variation = 0.0;      // 로봇 개체 편차 표준편차 (0.08 = ±8 %), seed 와 ID 로 고정
     bool require_localization = false;  // true: UNLOCALIZED 로 시작 (INIT_POSITION 힌트가 있어야 주행)
     std::optional<long long> seed;
     double speed_noise = 0.05;
@@ -112,6 +117,11 @@ bool parse_args(int argc, char** argv, Args& a) {
         else if (k == "--require-localization") a.require_localization = true;
         else if (k == "--battery-low") a.battery_low = std::stod(next(i));
         else if (k == "--battery-critical") a.battery_critical = std::stod(next(i));
+        else if (k == "--battery-idle-drain") a.battery_idle_drain = std::stod(next(i));
+        else if (k == "--battery-move-drain") a.battery_move_drain = std::stod(next(i));
+        else if (k == "--battery-accel-drain") a.battery_accel_drain = std::stod(next(i));
+        else if (k == "--battery-load-factor") a.battery_load_factor = std::stod(next(i));
+        else if (k == "--battery-variation") a.battery_variation = std::stod(next(i));
         else if (k == "--seed") a.seed = std::stoll(next(i));
         else if (k == "--speed-noise") a.speed_noise = std::stod(next(i));
         else if (k == "--log-level") a.log_level = next(i);
@@ -155,6 +165,9 @@ bool parse_args(int argc, char** argv, Args& a) {
                 "  --map-cache DIR (SET_MAP 번들 저장 위치, 기본 map_cache)\n"
                 "  --robot-width --robot-length --max-velocity --max-acceleration --battery\n"
                 "  --battery-low P (기본 20, WARNING LOW_BATTERY) --battery-critical P (기본 5, FATAL + DOCK 오더만)\n"
+                "  --battery-idle-drain R (%/s, 기본 0.01) --battery-move-drain R (%/s at 최대속도, 기본 0.05)\n"
+                "  --battery-accel-drain R (%/s at 최대 가감속, 기본 0) --battery-load-factor F (적재물 1개당 주행 소모 +F, 기본 0)\n"
+                "  --battery-variation S (개체 편차 표준편차, 기본 0. --seed 와 ID 로 고정, 0.7~1.3 배로 자름)\n"
                 "  --require-localization (UNLOCALIZED 로 시작, INIT_POSITION 힌트/제어판 전에는 오더 거절. 기본은 시작 자세에서 바로 LOCALIZED)\n"
                 "  --seed N --speed-noise R --log-level LV --gui\n"
                 "  --no-robot-detect (다른 로봇을 장애물로 인식하지 않는다. 기본은 인식: 서로 피하고, 부딪히면 COLLISION)\n"
@@ -298,7 +311,18 @@ int main(int argc, char** argv) {
                                        args.obstacle_speed);
     }
 
-    BatterySim battery(args.battery, 0.01, 0.05, 1.0, max_velocity);
+    BatterySim battery(args.battery, args.battery_idle_drain, args.battery_move_drain, 1.0, max_velocity);
+    battery.max_acceleration = args.max_acceleration;
+    battery.accel_drain = args.battery_accel_drain;
+    battery.load_factor = args.battery_load_factor;
+    if (args.battery_variation > 0) {
+        std::mt19937 battery_rng(seed_from_string((args.seed ? std::to_string(*args.seed) : std::string("x")) + "-"
+                                                  + args.id + "-battery"));
+        std::normal_distribution<double> eff(1.0, args.battery_variation);
+        battery.efficiency = std::clamp(eff(battery_rng), 0.7, 1.3);
+    }
+    log::info("[%s] battery model: idle %.3f move %.3f accel %.3f load x%.2f efficiency %.3f (%%/s)", args.id.c_str(),
+              battery.idle_drain, battery.move_drain, battery.accel_drain, battery.load_factor, battery.efficiency);
     OrderExecutor executor(args.id, args.x, args.y, args.theta, max_velocity, args.max_acceleration,
                             battery, map_model ? &*map_model : nullptr, args.robot_width, args.robot_length,
                             std::move(obstacle_field), args.sensor_range);
