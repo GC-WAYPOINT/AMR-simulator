@@ -147,18 +147,32 @@ class ZoneType(str, Enum):
 
 
 class TrafficGate(BaseModel):
-    """진입 방향별 대기·출구 node. 좌표는 존 버전에 복사해 보존한다."""
+    """진입 방향별 대기·출구 node. 좌표는 존 버전에 복사해 보존한다.
+
+    queue 는 대기 node 뒤의 대기열 자리다. queue[0] 이 대기 node 바로 뒤(2번째 자리), 마지막이 줄 끝이다.
+    로봇은 줄 끝 -> 대기 node 순서로 지나가므로 진입 방향 뒤쪽으로 한 줄로 놓는다 (FMS 전용, 로봇은 모른다).
+    """
 
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     gate_id: str = Field(min_length=1)
     wait: Pose
     exit: Pose
+    queue: list[Pose] = Field(default_factory=list, max_length=16)
 
     @model_validator(mode="after")
     def finite_coordinates(self):
-        if not all(math.isfinite(v) for p in (self.wait, self.exit) for v in (p.x,p.y,p.theta)):
-            raise ValueError("대기·출구 node는 유한한 좌표여야 한다")
+        if not all(math.isfinite(v) for p in (self.wait, self.exit, *self.queue) for v in (p.x,p.y,p.theta)):
+            raise ValueError("대기·출구·대기열 node는 유한한 좌표여야 한다")
         return self
+
+
+def queue_poses(points, head) -> list[Pose]:
+    """대기열 점들(대기 node 바로 뒤부터 줄 끝까지)의 자세. 각 자리는 앞 자리(마지막엔 head)를 바라본다."""
+    poses, ahead = [], head
+    for p in points:
+        poses.append(Pose(x=p.x, y=p.y, theta=math.atan2(ahead.y - p.y, ahead.x - p.x)))
+        ahead = p
+    return poses
 
 
 class AutoDoor(BaseModel):
@@ -176,6 +190,9 @@ class AutoDoor(BaseModel):
                          description="문 제어기 MQTT 토픽 id. 현장 사이에서도 겹치면 안 된다")
     node_a: Point
     node_b: Point
+    queue_a: list[Point] = Field(default_factory=list, max_length=16,
+                                 description="A 쪽 대기열 (A 바로 뒤부터 줄 끝까지). A 에서 들어가는 로봇이 선다")
+    queue_b: list[Point] = Field(default_factory=list, max_length=16, description="B 쪽 대기열")
 
     @model_validator(mode="after")
     def _check_nodes(self) -> "AutoDoor":
@@ -188,8 +205,10 @@ class AutoDoor(BaseModel):
         a, b = self.node_a, self.node_b
         ab = math.atan2(b.y - a.y, b.x - a.x)
         ba = math.atan2(a.y - b.y, a.x - b.x)
-        return [TrafficGate(gate_id="a2b", wait=Pose(x=a.x, y=a.y, theta=ab), exit=Pose(x=b.x, y=b.y, theta=ab)),
-                TrafficGate(gate_id="b2a", wait=Pose(x=b.x, y=b.y, theta=ba), exit=Pose(x=a.x, y=a.y, theta=ba))]
+        return [TrafficGate(gate_id="a2b", wait=Pose(x=a.x, y=a.y, theta=ab), exit=Pose(x=b.x, y=b.y, theta=ab),
+                            queue=queue_poses(self.queue_a, a)),
+                TrafficGate(gate_id="b2a", wait=Pose(x=b.x, y=b.y, theta=ba), exit=Pose(x=a.x, y=a.y, theta=ba),
+                            queue=queue_poses(self.queue_b, b))]
 
 
 class Zone(BaseModel):
@@ -216,14 +235,19 @@ class Zone(BaseModel):
             raise ValueError("speed_limit 은 감속 구역(slow)에만, 그리고 반드시 지정해야 한다")
         if self.type == ZoneType.OCCUPANCY:
             rectangle_frame(self.polygon)
-            if not self.gates or len({g.gate_id for g in self.gates}) != len(self.gates):
-                raise ValueError("점유 존에는 고유 ID의 대기·출구 node 쌍이 필요하다")
+            if len({g.gate_id for g in self.gates}) != len(self.gates):
+                raise ValueError("점유 존의 대기·출구 node 쌍은 고유 ID를 가져야 한다")
         elif self.gates:
             raise ValueError("대기·출구 node는 점유 존에만 지정할 수 있다")
         # 첫 점 == 끝 점으로 명시적으로 닫아 보낸 경우는 허용하되 최소 3개는 유지.
         if len(self.polygon) >= 2 and self.polygon[0] == self.polygon[-1] and len(self.polygon) < 4:
             raise ValueError("닫힌 폴리곤이면 꼭짓점이 4개 이상이어야 한다 (첫 점 반복 포함)")
         return self
+
+    @property
+    def automatic_gate(self) -> bool:
+        """사각형만 저장하고, 작업마다 대기·퇴장 지점을 계산하는 점유구역."""
+        return self.type == ZoneType.OCCUPANCY and not self.gates
 
     def contains(self, x: float, y: float) -> bool:
         """점이 폴리곤 내부인가 (ray casting). 경계는 구현 정의."""
