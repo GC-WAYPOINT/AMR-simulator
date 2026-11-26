@@ -161,6 +161,37 @@ class TrafficGate(BaseModel):
         return self
 
 
+class AutoDoor(BaseModel):
+    """
+    자동문 설정. 점유 존(`type=occupancy`) 하나가 문 하나를 뜻한다.
+
+    node_a / node_b 는 문 양쪽의 진입점 위치(x, y)다. A 쪽에서 들어가면 A 가 대기(진입) node, B 가 통과 완료 node 이고
+    B 쪽에서 들어가면 반대다. `Zone.gates` 는 이 두 node 로 FMS 가 채운다 (점유 존 교통 제어를 그대로 쓰기 위해).
+    로봇(C++)은 이 필드를 모르고 일반 점유 존으로 취급한다 — 문 신호는 FMS 가 보낸다 (`common/door_proto.py`).
+    """
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    door_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$",
+                         description="문 제어기 MQTT 토픽 id. 현장 사이에서도 겹치면 안 된다")
+    node_a: Point
+    node_b: Point
+
+    @model_validator(mode="after")
+    def _check_nodes(self) -> "AutoDoor":
+        if math.hypot(self.node_a.x - self.node_b.x, self.node_a.y - self.node_b.y) < 1e-6:
+            raise ValueError("자동문 양쪽 node 는 서로 다른 위치여야 한다")
+        return self
+
+    def gates(self) -> list[TrafficGate]:
+        """진입 방향별 gate. 자세(theta)는 진행 방향(진입점 -> 통과 완료점)으로 정한다."""
+        a, b = self.node_a, self.node_b
+        ab = math.atan2(b.y - a.y, b.x - a.x)
+        ba = math.atan2(a.y - b.y, a.x - b.x)
+        return [TrafficGate(gate_id="a2b", wait=Pose(x=a.x, y=a.y, theta=ab), exit=Pose(x=b.x, y=b.y, theta=ab)),
+                TrafficGate(gate_id="b2a", wait=Pose(x=b.x, y=b.y, theta=ba), exit=Pose(x=a.x, y=a.y, theta=ba))]
+
+
 class Zone(BaseModel):
     """다각형 구역 하나 (정규화 완료)."""
 
@@ -173,9 +204,14 @@ class Zone(BaseModel):
     gates: list[TrafficGate] = Field(default_factory=list)
     speed_limit: Optional[float] = Field(default=None, gt=0, le=10,
                                          description="감속 구역(slow)의 최고 속도 m/s. 다른 구역에는 없다")
+    door: Optional[AutoDoor] = Field(default=None, description="자동문. 점유 존에만 지정한다 (gates 는 여기서 파생)")
 
     @model_validator(mode="after")
     def _check_polygon(self) -> "Zone":
+        if self.door is not None:
+            if self.type != ZoneType.OCCUPANCY:
+                raise ValueError("자동문은 점유 존(occupancy)에만 지정할 수 있다")
+            self.gates = self.door.gates()
         if (self.type == ZoneType.SLOW) != (self.speed_limit is not None):
             raise ValueError("speed_limit 은 감속 구역(slow)에만, 그리고 반드시 지정해야 한다")
         if self.type == ZoneType.OCCUPANCY:
