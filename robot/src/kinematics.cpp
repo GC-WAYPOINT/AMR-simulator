@@ -326,6 +326,9 @@ RobotKinematicState TrapezoidalKinematics::get_state() const {
     if (world_) {  // 물리 모드는 실제 속도를 보고한다 (속도는 크기만, 후진도 양수)
         v = std::abs(world_->v_fwd());
         w = world_->yaw_rate();
+        // 정지 판정(at_rest)이면 brake() 가 world 를 더 진행하지 않아 마지막 잔여 속도(수 cm/s)가 굳는다.
+        // 그대로 보고하면 FMS 의 정지 판정(|v| < 0.01)을 영영 통과하지 못해 교통 허가가 막힌다.
+        if (world_->at_rest()) v = w = 0.0;
     }
     return RobotKinematicState{x, y, theta, v, acceleration_, w, std::move(path), is_path_complete()};
 }
