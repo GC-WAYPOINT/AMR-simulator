@@ -1,0 +1,297 @@
+{
+  "_설명": "synth3 실험 현장 (설계서 표 3.3). experiments/provision.py 가 FMS REST 로 등록한다. 좌표는 world m, theta rad. 대기 node 는 통로 입구에서 1.4 m 바깥(차체 반경 0.53 + 여유), 출구 node 는 통로 축에서 2 m 비켜나 어떤 대기 node 와도 겹치지 않는다 (겹치면 양방향 교착, 설계서 부록 A.4).",
+  "map": {
+    "dir": "maps/synth3",
+    "map_id": "floor-1",
+    "files": [
+      "fms_map.json",
+      "edited_navi_gridmap.png"
+    ]
+  },
+  "zones": [
+    {
+      "name": "Z1 주 통로",
+      "type": "occupancy",
+      "x": 8.5,
+      "y": 10.0,
+      "width": 24.0,
+      "height": 2.0,
+      "gates": [
+        {
+          "gate_id": "Z1-W",
+          "wait": {
+            "x": 7.1,
+            "y": 11.0,
+            "theta": 0.0
+          },
+          "exit": {
+            "x": 33.9,
+            "y": 13.0,
+            "theta": 0.0
+          }
+        },
+        {
+          "gate_id": "Z1-E",
+          "wait": {
+            "x": 33.9,
+            "y": 11.0,
+            "theta": 3.141592
+          },
+          "exit": {
+            "x": 7.1,
+            "y": 9.0,
+            "theta": 3.141592
+          }
+        }
+      ]
+    },
+    {
+      "name": "Z2 북 우회",
+      "type": "occupancy",
+      "x": 8.5,
+      "y": 0.0,
+      "width": 24.0,
+      "height": 2.0,
+      "gates": [
+        {
+          "gate_id": "Z2-W",
+          "wait": {
+            "x": 7.1,
+            "y": 1.0,
+            "theta": 0.0
+          },
+          "exit": {
+            "x": 33.9,
+            "y": 3.0,
+            "theta": 0.0
+          }
+        },
+        {
+          "gate_id": "Z2-E",
+          "wait": {
+            "x": 33.9,
+            "y": 1.0,
+            "theta": 3.141592
+          },
+          "exit": {
+            "x": 7.1,
+            "y": 3.0,
+            "theta": 3.141592
+          }
+        }
+      ]
+    },
+    {
+      "name": "Z3 남 우회",
+      "type": "occupancy",
+      "x": 8.5,
+      "y": 20.0,
+      "width": 24.0,
+      "height": 2.0,
+      "gates": [
+        {
+          "gate_id": "Z3-W",
+          "wait": {
+            "x": 7.1,
+            "y": 21.0,
+            "theta": 0.0
+          },
+          "exit": {
+            "x": 33.9,
+            "y": 19.0,
+            "theta": 0.0
+          }
+        },
+        {
+          "gate_id": "Z3-E",
+          "wait": {
+            "x": 33.9,
+            "y": 21.0,
+            "theta": 3.141592
+          },
+          "exit": {
+            "x": 7.1,
+            "y": 19.0,
+            "theta": 3.141592
+          }
+        }
+      ]
+    }
+  ],
+  "chargers": [
+    {
+      "name": "C-W",
+      "x": 7.9,
+      "y": 15.5,
+      "theta": 3.141592,
+      "entry": "BACKWARD"
+    },
+    {
+      "name": "C-E",
+      "x": 33.1,
+      "y": 15.5,
+      "theta": 0.0,
+      "entry": "BACKWARD"
+    }
+  ],
+  "locations": [
+    {
+      "name": "W-01",
+      "x": 3.0,
+      "y": 3.0,
+      "theta": 3.141592,
+      "type": "station"
+    },
+    {
+      "name": "E-01",
+      "x": 38.0,
+      "y": 3.0,
+      "theta": 0.0,
+      "type": "station"
+    },
+    {
+      "name": "W-02",
+      "x": 3.0,
+      "y": 7.0,
+      "theta": 3.141592,
+      "type": "station"
+    },
+    {
+      "name": "E-02",
+      "x": 38.0,
+      "y": 7.0,
+      "theta": 0.0,
+      "type": "station"
+    },
+    {
+      "name": "W-03",
+      "x": 3.0,
+      "y": 11.0,
+      "theta": 3.141592,
+      "type": "station"
+    },
+    {
+      "name": "E-03",
+      "x": 38.0,
+      "y": 11.0,
+      "theta": 0.0,
+      "type": "station"
+    },
+    {
+      "name": "W-04",
+      "x": 3.0,
+      "y": 15.0,
+      "theta": 3.141592,
+      "type": "station"
+    },
+    {
+      "name": "E-04",
+      "x": 38.0,
+      "y": 15.0,
+      "theta": 0.0,
+      "type": "station"
+    },
+    {
+      "name": "W-05",
+      "x": 3.0,
+      "y": 19.0,
+      "theta": 3.141592,
+      "type": "station"
+    },
+    {
+      "name": "E-05",
+      "x": 38.0,
+      "y": 19.0,
+      "theta": 0.0,
+      "type": "station"
+    },
+    {
+      "name": "P-W1",
+      "x": 1.2,
+      "y": 5.0,
+      "theta": 3.141592,
+      "type": "parking"
+    },
+    {
+      "name": "P-E1",
+      "x": 39.8,
+      "y": 5.0,
+      "theta": 0.0,
+      "type": "parking"
+    },
+    {
+      "name": "P-W2",
+      "x": 1.2,
+      "y": 9.0,
+      "theta": 3.141592,
+      "type": "parking"
+    },
+    {
+      "name": "P-E2",
+      "x": 39.8,
+      "y": 9.0,
+      "theta": 0.0,
+      "type": "parking"
+    },
+    {
+      "name": "P-W3",
+      "x": 1.2,
+      "y": 13.0,
+      "theta": 3.141592,
+      "type": "parking"
+    },
+    {
+      "name": "P-E3",
+      "x": 39.8,
+      "y": 13.0,
+      "theta": 0.0,
+      "type": "parking"
+    }
+  ],
+  "robot_starts": {
+    "west": [
+      [
+        1.2,
+        5.0
+      ],
+      [
+        1.2,
+        9.0
+      ],
+      [
+        1.2,
+        13.0
+      ],
+      [
+        4.5,
+        5.0
+      ],
+      [
+        4.5,
+        17.0
+      ]
+    ],
+    "east": [
+      [
+        39.8,
+        5.0
+      ],
+      [
+        39.8,
+        9.0
+      ],
+      [
+        39.8,
+        13.0
+      ],
+      [
+        36.5,
+        5.0
+      ],
+      [
+        36.5,
+        17.0
+      ]
+    ]
+  }
+}

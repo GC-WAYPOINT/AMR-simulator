@@ -16,6 +16,7 @@ AMR(자율주행 로봇) 시뮬레이터 모노레포. 세 부분이 MQTT+JSON �
 | `build/` | 빌드 산출물 (gitignore): `bin/` 실행파일, `obj/` 오브젝트 |
 | `viewer/` | 라이브 플릿 뷰어 (Python/PySide6). 관측자. 유일한 발행은 `b` 모드 월드 장애물 배치/삭제 (`sim/v1/world/obstacles/{id}`, retained) |
 | `broker/` | 개발용 mosquitto 설정 (`mosquitto.conf`: `127.0.0.1:1883`, 익명 허용, persistence 끔) |
+| `experiments/` | FMS 연동 실험(AI 학습 데이터 수집). `sites/*.json` 현장 스펙, `provision.py` FMS 등록, `smoke_synth3.py` 확인 실행. `experiments/README.md` |
 
 FMS(`fms_server`)는 형제 폴더 `../AMR-fms` 별도 리포(private)에 있고 같은 프로토콜로 붙는다. FMS 가 없으면 `build/bin/send_order` 가 그 역할을 대신한다. `maps/` 는 클라이언트와 뷰어가 같이 쓰며, `viewer/maps` 사본은 없다.
 
@@ -136,6 +137,7 @@ CI(`.github/workflows/ci.yml`): macOS 는 빌드 + 단위 테스트 + 통합 일
 - `maps/` 구성:
   - `641931de9eae7cecb34d5765`, `warehouse`: 실제 맵이다. `AMR_master/maps/` 에서 수동으로 복사했으므로 원본이 바뀌면 직접 다시 복사한다.
   - `gen_loop`, `synth_loop`, `gui_map`, `test1~3`, `empty_hall1`, `gachon`, `gachon_1f`: 생성 맵이다.
+  - `synth3`: 실험 맵 (`tools/map_layouts/synth3.txt`, seed 3). 점유 존·목적지는 맵 폴더가 아니라 `experiments/sites/synth3.json` 으로 FMS 에 등록한다. 좌표가 스펙과 묶여 있어 다시 생성하면 스펙을 같이 확인한다.
   - `empty_hall1`: 회귀 테스트(`physics_test.py`)가 쓰는 맵이고 `chargers.json` 이 있다. 테스트 좌표가 이 맵 기준이라 함부로 다시 생성하지 않는다.
   - `gui_map`: 사용자가 편집기로 원점을 (-11.65625, -11.625)로 바꾸고 `edits.json` 을 붙였다. 함부로 다시 생성하지 않는다.
   - `test1`: `grid.png`/`edited_navi_gridmap.png` 가 없어서 편집기로 열 수 없다.
