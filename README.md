@@ -9,7 +9,7 @@
 | `robot/` | C++ 로봇 클라이언트 (`src/ include/ tools/ tests/ Makefile`, 아래 문서). 빌드 산출물은 `build/` |
 | `tools/` | Python 도구: 통합 런처, 맵 생성/정리/편집기 |
 | `maps/` | 맵 (클라이언트와 뷰어가 공유) |
-| `scripts/` | `launch.sh`/`stop.sh` (터미널 대화형 N대 실행/종료) |
+| `scripts/` | `launch.sh`/`stop.sh` (터미널 대화형 N대 실행/종료), `demo_cleanroom/` (FMS cleanroom 사이트 5대 시연: 기동·등록·프리셋·연속 게시) |
 | `viewer/` | 라이브 플릿 뷰어 (Python/Qt) -- `viewer/README.md` |
 | `broker/` | 개발용 mosquitto 설정 -- `broker/README.md` |
 
@@ -307,6 +307,19 @@ GT 와 벌어진 만큼이 누적 오차다 (패널 `error`). 보정 알고리�
 벽 안 시작/저마찰/장거리/동적 장애물/장애물 충돌/로봇 간 인식/월드 장애물 등, 전체 약 20 분. `AMR_TEST_TIME_SCALE=4` 로 배속할 수 있다).
 경로계획 시간은 `build/bin/plan_bench MAP X0 Y0 X1 Y1` 로 잰다.
 
+### FMS 연동 시연 (`scripts/demo_cleanroom/`)
+
+FMS(`../AMR-fms`, 8000)의 `cleanroom` 사이트에 등록된 상차지점 A-1~7·반납지점1~3 을 써서 로봇 5대가 상차→하차→충전을 반복한다.
+목적지·존은 FMS 화면에서 등록한 것을 그대로 쓴다. 리포 루트에서:
+
+```bash
+mosquitto -c broker/mosquitto.conf -v               # 브로커 (FMS 가 1883 에 붙는다)
+scripts/demo_cleanroom/robots.sh                    # AMR-101~105 를 충전소-A~E 에서 띄움. Ctrl+C 로 5대 종료
+python3 scripts/demo_cleanroom/setup.py             # 로봇 등록 + 충전 정책(작업 후 충전소로) + 프리셋 시연1~6
+python3 scripts/demo_cleanroom/loop.py              # 진행 중 작업 5개를 유지하며 시연1~6 을 계속 게시. Ctrl+C 로 게시 중지
+python3 scripts/demo_cleanroom/publish.py 3 6       # 원하는 시연만 한 번 게시
+```
+
 ### 통합 런처 (`tools/launcher.py`)
 
 브로커, 로봇 클라이언트, 뷰어, 맵 편집기, 맵 생성기를 한 창에서 켜고 끈다.
@@ -349,6 +362,26 @@ build/bin/robot_client --id AMR-001 --map maps/gen_loop/fms_map.json --x 1.0 --y
 - 원본에 모서리 조각이 드물어서 일부 모서리는 일자벽 조각 두 장으로 합성된다.
   타일 경계(1 m 격자)에서 줄무늬가 끊기는 건 남아 있다 — 표시 문제, 주행 영향 없음
 - 대각선으로만 맞닿은 통로는 이어지지 않는다 (planner 도 못 지나간다)
+
+### 평면도에서 그리기 (`tools/plan_map.py`)
+
+1 m 격자로는 못 그리는 사선/곡선 벽을 실제 평면도 좌표 그대로 그린다. 입력은 plan JSON (형식은 파일 머리 주석).
+
+```bash
+.venv/bin/python tools/plan_map.py tools/map_plans/factory_angled.json --out maps/factory_angled   # 리포 루트에서
+build/bin/robot_client --id AMR-001 --map maps/factory_angled/fms_map.json --x 93.6 --y 22.1
+```
+
+데이터 수집용 대형 맵 3개 (해상도 0.05 m/px). 벽은 공개 매물 브로슈어의 평면도를 눈으로 추적한 근사치이고,
+설비/랙/책상 배치는 가정이다. 문 1.0 m(여닫이) / 1.8 m(양여닫이) / 3.2 m(지게차), 설비 사이 통로 1.5~3.2 m, 주통로 2.0~4.0 m.
+
+| 맵 | 원본 | 크기(여백 포함) | 통로 칸 예시 |
+|---|---|---|---|
+| `factory_textile` | 섬유공장 309,552 SF, Toccoa GA | 219 × 212 m | (156.7, 34.5) |
+| `factory_angled` | 제조·창고·사무 189,000 SF, Roanoke IN (사선·곡선 벽) | 180 × 163 m | (93.6, 22.1) |
+| `factory_cleanroom` | 생산·클린룸 200,634 SF, Griffin GA | 196 × 124 m | (140.1, 17.6) |
+
+출처 URL 은 각 plan JSON 의 `source` 에 있다.
 
 ### 원본 없이 한 번에 그리기 (`tools/synth_map.py`)
 

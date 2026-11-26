@@ -10,7 +10,7 @@ AMR(자율주행 로봇) 시뮬레이터 모노레포. 세 부분이 MQTT+JSON �
 |---|---|
 | `robot/` (`src/ include/ tools/ tests/ Makefile`) | C++20 로봇 클라이언트. 프로세스 1개 = 로봇 1대. Python 원본(`robot_client/*.py`, 이 리포에 없음) 포팅이라 주석에 원본 참조가 많다. 이동은 MuJoCo 물리로 계산한다 |
 | `tools/*.py` | Python 도구: 맵 생성/정리/편집기, 통합 런처. 루트 `./launcher` 가 진입점 |
-| `scripts/` | `launch.sh`/`stop.sh` (터미널 대화형 N대 실행/종료) |
+| `scripts/` | `launch.sh`/`stop.sh` (터미널 대화형 N대 실행/종료), `demo_cleanroom/` (FMS cleanroom 사이트 5대 시연: 기동·등록·프리셋·연속 게시) |
 | `build/` | 빌드 산출물 (gitignore): `bin/` 실행파일, `obj/` 오브젝트 |
 | `viewer/` | 라이브 플릿 뷰어 (Python/PySide6). 관측자. 유일한 발행은 `b` 모드 월드 장애물 배치/삭제 (`sim/v1/world/obstacles/{id}`, retained) |
 | `broker/` | 개발용 mosquitto 설정 (`mosquitto.conf`: `127.0.0.1:1883`, 익명 허용, persistence 끔) |
@@ -79,6 +79,7 @@ build/bin/plan_bench maps/gachon/fms_map.json 45.5 30 84 30                     
 # 맵 도구
 .venv/bin/python tools/gen_map.py tools/map_layouts/loop.txt --out maps/gen_loop     # 실제 맵 조각을 이어 붙여 생성
 .venv/bin/python tools/synth_map.py tools/map_layouts/loop.txt --out maps/synth_loop # 벽+질감 노이즈로 한 번에 생성
+.venv/bin/python tools/plan_map.py tools/map_plans/factory_angled.json --out maps/factory_angled   # 실제 평면도 추적 좌표(사선/곡선 벽) -> 맵
 .venv/bin/python tools/clean_map.py maps/gen_loop/fms_map.json --out DIR --level normal   # 노이즈 정리 (gen_map.py --clean 으로도)
 .venv/bin/python tools/map_gen_gui.py   # 생성 GUI. synth_map/gen_map 을 QProcess 로 실행
 .venv/bin/python tools/map_editor.py maps/gen_loop/fms_map.json   # 편집기
@@ -139,6 +140,7 @@ CI(`.github/workflows/ci.yml`): macOS 는 빌드 + 단위 테스트 + 통합 일
   - `empty_hall1`: 회귀 테스트(`physics_test.py`)가 쓰는 맵이고 `chargers.json` 이 있다. 테스트 좌표가 이 맵 기준이라 함부로 다시 생성하지 않는다.
   - `gui_map`: 사용자가 편집기로 원점을 (-11.65625, -11.625)로 바꾸고 `edits.json` 을 붙였다. 함부로 다시 생성하지 않는다.
   - `test1`: `grid.png`/`edited_navi_gridmap.png` 가 없어서 편집기로 열 수 없다.
+  - `factory_textile`, `factory_angled`, `factory_cleanroom`: 데이터 수집용 대형 공장 맵 (`tools/map_plans/*.json`, `plan_map.py`). res **0.05** (다른 생성 맵과 다름), 약 180~220 m 규모. 벽은 공개 매물 브로슈어 평면도를 추적했고 설비/랙/책상 배치는 가정이다.
 
 ## 아키텍처 (C++ 클라이언트)
 
@@ -169,6 +171,7 @@ CI(`.github/workflows/ci.yml`): macOS 는 빌드 + 단위 테스트 + 통합 일
   - 이상 궤적 속도는 실제 속도 ±0.3 m/s (각속도 ±0.5 rad/s)로 묶는다. 방위 허용치는 서 있다 출발할 때 0.05 rad, 달리는 중 0.3 rad 이고(이상 궤적은 0.02), 큰 꺾임(0.3 rad 초과) 경유점에서 서도록 `stop_distance_ahead()` 로 감속한다. 이걸 빼면 슬립/지연 때문에 서고-돌고를 반복하거나 모퉁이에서 순간 정지(수 m/s² 감속)한다.
   - 바퀴 서보 게인 `kServoGain = 6`: 60 이면 접촉 compliance 와 얽혀 정지 후에도 떨린다. 일단 6 이어도 슬립이 쓸 만하게 나온다.
   - `emergency_stop()`/`set_pose()` 는 world 를 즉시 정지/순간이동시킨다. `hold()` 와 `brake()` 는 `max_deceleration` 으로 감속시킨다. world 는 `kinematics.step/hold/brake` 안에서만 진행하므로 호출이 없으면 시간이 멈춘다.
+  - `State.velocity` 는 물리 실측 속도지만, `at_rest()`(0.02 m/s·0.05 rad/s 미만)이면 0 으로 보고한다 (`kinematics.cpp` `get_state`). 정지 판정이면 `brake()` 가 world 를 진행하지 않아 마지막 잔여 속도가 굳는데, 그대로 보고하면 FMS 정지 판정(|v| < 0.01)을 못 넘어 교통 허가·예약 해제가 막혔다 (2026-11-26).
   - 뷰어 디버그 토픽: `fms/v1/{id}/physics` (`PhysicsDebug`, `schemas.hpp`). `State` 는 뷰어 스키마가 `extra=forbid` 라 필드를 못 더해서 프로토콜 밖 토픽으로 뺐다. `main` 루프가 tick 마다 `executor.build_physics()` 를 발행한다. 뷰어는 pydantic 없이 dict 로 읽고(`fleet_monitor.py`), `qt_viewer.py` 가 외삽/궤적/GT/패널(`p`,`l`,`o`,`k`)로 그린다. 뷰어 몸체 = 보고 위치(`est_*` = State.pose), 청록 GT = 참 위치(`x y theta`), 노란 점선 = 보정 전 오도메트리(`odom_*`). 필드를 바꾸면 `schemas.cpp` `PhysicsDebug::to_json_string` 과 `qt_viewer.py` `_physics_text`/`display_pose`/`truth_pose` 를 같이 고친다.
   - GUI 제어판(`gui.cpp`)에는 같은 값을 보이는 Physics 절과 마찰/질량 설정칸이 있다 (`CmdConfigure.friction/mass` -> `apply_robot_geometry`). `AMR_GUI_SNAPSHOT=파일.png` 이면 1.5 초 뒤 창을 PNG 로 저장한다 (offscreen 레이아웃 확인용).
   - **추정 자세 기반 제어 + 위치추정 보정 (기본 켜짐)**: `sync_from_world()` 가 `world.est_*` 를 읽는다. 추정 = `Localizer`(`localizer.hpp/cpp`)가 오도메트리(`odom_*`, 바퀴 엔코더 적분)에 얹는 보정 오프셋 `T` (`추정 = T ∘ 오도메트리`). `Localizer::update()` 는 `PhysicsWorld::step()` 끝에서 주기(`--loc-rate`, 기본 5 Hz)마다 `z = 참 자세 + 노이즈` 로 추정을 `gain` 만큼 당기고 `T` 를 다시 푼다 (한 번에 0.15 m/0.1 rad 상한, dropout 확률로 측정 누락). `--loc-rate 0` 이면 보정 없음(추정 = 순수 오도메트리). `Localizer` 는 엔진을 모른다 (참 자세는 호출자가 넘긴다) — 나중에 EKF 등으로 바꿀 때 이 클래스만 갈아낀다. 제어/경로계획/도착/`State.pose` 가 전부 추정으로 돈다. 참 자세(`world.x()` 등)는 충돌 판정(`check_collision`), 기록, `physics` 토픽(뷰어)에만 쓴다. `teleport`/`set_pose` 는 오도메트리를 그 자세로 맞추고 `T` 를 지운다. 경로선은 뷰어에서 추정 좌표로 그린다.
@@ -265,6 +268,7 @@ CI(`.github/workflows/ci.yml`): macOS 는 빌드 + 단위 테스트 + 통합 일
   - 검사: `planner.cpp` 의 inflate 규칙을 Python 으로 재현했다 (`clean_map.inflate_free`). **planner 규칙이 바뀌면 같이 고친다.** 통로 사분면에 노이즈 픽셀을 허용하지 않는 이유도 이 팽창 때문이다.
   - 출력: `grid.png` + `edited_navi_gridmap.png` + `gen_info.json` + `layout.txt`. `edited_navi_gridmap.png` 는 최초 생성 때만 복사하고 이후에는 보존한다 (편집기/FMS 웹 UI 수정용). 메타의 `image` 는 이 파일이다.
 - **`synth_map.py`**: 같은 레이아웃을 픽셀 마스크로 편다 (칸 중심 = 타일 모서리, gen_map 과 같은 배치). 경계 양쪽 `wall-px/2` 에 벽을 긋고 질감 노이즈를 맵 전체에 한 번에 깐다. 조각 경계가 없어서 이음매가 없다. 저장/검사/파싱은 `gen_map` 의 `save_map`/`check`/`load_layout` 을 쓴다.
+- **`plan_map.py`**: 1 m 격자 레이아웃 대신 plan JSON(원본 도면 px 좌표 + `scale` m/px)의 외곽 다각형·벽 꺾은선·문·기둥·설비 배치(`fills`: 블록 크기와 통로 폭)를 그대로 래스터화해 사선/곡선 벽 각도를 지킨다. 질감은 `synth_map.render`, 연결 검사는 `clean_map.inflate_free`/`label`(떨어진 구역을 도면 px 로 알려 준다). `plan.json` 사본과 `gen_info.json` 을 맵 폴더에 남긴다. `edited_navi_gridmap.png` 보존 규칙은 `gen_map` 과 같다.
 - **`clean_map.py`**:
   - 처리 순서: 통로 구멍 메움 → FREE opening → 작은 FREE 섬 삭제 → FREE 에서 먼 비-FREE 를 128 로 → 선택(실선 벽, 값 평탄화).
   - 프리셋: light/normal/strong.

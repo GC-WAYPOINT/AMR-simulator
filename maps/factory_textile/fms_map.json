@@ -1,0 +1,11 @@
+{
+  "name": "factory_textile",
+  "image": "edited_navi_gridmap.png",
+  "resolution": 0.05,
+  "origin_x": -10.0,
+  "origin_y": -10.0,
+  "width_px": 4383,
+  "height_px": 4245,
+  "occupied_thresh": 64,
+  "free_thresh": 192
+}
