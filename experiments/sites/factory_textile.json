@@ -1,0 +1,15 @@
+{
+  "_설명": "factory_textile 실험 현장. 점유 존·목적지·충전기는 편집용 FMS(experiments/edit_fms.py) 웹 UI 에서 사람이 찍고 experiments/export_site.py 로 이 파일에 다시 쓴다. 손으로 고치지 말 것.",
+  "map": {
+    "dir": "maps/factory_textile",
+    "map_id": "floor-1",
+    "files": [
+      "fms_map.json",
+      "edited_navi_gridmap.png"
+    ]
+  },
+  "zones": [],
+  "chargers": [],
+  "locations": [],
+  "robot_starts": {}
+}

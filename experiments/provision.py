@@ -74,7 +74,8 @@ def provision(fms_url: str, spec_path: Path, site: str, robots: list[str], *, zo
     zone_ids, zone_names = [], {}   # FMS 가 zone_id 를 새로 만든다 (운행마다 다름) — 데이터셋은 이름으로 묶는다
     if zones:
         for z in spec.get("zones", []):
-            body = {k: z[k] for k in ("name", "type", "x", "y", "width", "height", "gates")}
+            body = {k: z[k] for k in ("name", "type", "x", "y", "width", "height", "gates", "rotation", "speed_limit")
+                    if k in z}
             r = fms.post(base + "/zones", dict(body, base_version=version))
             version = r["version"]
             zone_ids.append(r["zone_id"])
